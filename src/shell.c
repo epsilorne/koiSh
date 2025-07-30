@@ -6,6 +6,7 @@
 #include <unistd.h>
 
 #include "builtin.h"
+#include "plist.h"
 
 // Default line buffer size before reallocating more memory
 #define DEFAULT_BUFFER_SIZE 1024;
@@ -81,7 +82,9 @@ char** sh_getargs(char* line) {
     exit(EXIT_FAILURE);
   }
 
-  while (token != NULL) {
+  while (token) {
+    /* TODO: here we should check if the token is e.g. ';',
+    if it is then add a new entry to plist */
     buf[i++] = token;
 
     if (i >= buf_size) {
@@ -109,7 +112,7 @@ char** sh_getargs(char* line) {
  *
  * Returns 1 on success.
  */
-int sh_exec(char** args) {
+int sh_exec(char** args, process_t* p) {
   pid_t pid;
   int status;
 
@@ -129,6 +132,8 @@ int sh_exec(char** args) {
     exit(EXIT_FAILURE);
   }
   else {
+    // Update process struct pid with the child's pid
+    p->pid = pid;
     waitpid(pid, &status, WUNTRACED);
   }
 
@@ -149,6 +154,11 @@ int sh_process(char** args) {
     fprintf(stderr, "koish: did you mean to say something?\n");
   }
 
+  /* TODO: need to have sh_getargs return a linked list of these,
+  then we can iterate through them. Also means sh_process takes
+  the linked list as an argument. */
+  process_t* p = add_to_plist(0, args);
+
   // If it is a built-in, execute it
   for (int i = 0; i < BUILTIN_COUNT; ++i) {
     if (strcmp(args[0], builtins[i]) == 0) {
@@ -157,7 +167,7 @@ int sh_process(char** args) {
   }
 
   // Otherwise, we create a process and execute that program
-  return sh_exec(args);
+  return sh_exec(args, p);
 }
 
 /**
@@ -176,8 +186,18 @@ void sh_loop(void) {
     args = sh_getargs(line);
     status = sh_process(args);
 
+    // TODO: temporary only - remove!
+    fprintf(stderr, "koish: started a process (pid=%u) with args {", HEAD->pid);
+    char** a = HEAD->argv;
+    while (*a) {
+      fprintf(stderr, "%s, ", *a);
+      a++;
+    }
+    fprintf(stderr, "}\n");
+
     free(line);
     free(args);
+    free_plist();
   } while (status);
 }
 
