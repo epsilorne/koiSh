@@ -8,10 +8,10 @@
 #include "builtin.h"
 
 // Default line buffer size before reallocating more memory
-const size_t DEFAULT_BUFFER_SIZE = 1024;
+#define DEFAULT_BUFFER_SIZE 1024;
 
 // Default arg buffer count before reallocating more memory
-const size_t DEFAULT_ARG_COUNT = 8;
+#define DEFAULT_ARG_COUNT 8;
 
 const char* DELIMS = " \t\n\r";
 
@@ -145,6 +145,10 @@ int sh_exec(char** args) {
  * The return value of the command/program is returned.
  */
 int sh_process(char** args) {
+  if (!args[0]) {
+    fprintf(stderr, "koish: did you mean to say something?\n");
+  }
+
   // If it is a built-in, execute it
   for (int i = 0; i < BUILTIN_COUNT; ++i) {
     if (strcmp(args[0], builtins[i]) == 0) {
