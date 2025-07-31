@@ -1,10 +1,10 @@
 # koiSh
 
-A toy shell, written mainly to learn the innards of how OSes work.
+A (non-POSIX) toy shell, written mainly to learn the innards of how shells work.
 
 Other doco TBA.
 
-## Installation
+## Installation and Running
 ```bash
 git clone https://github.com/epsilorne/koiSh.git
 cd koiSh
@@ -12,10 +12,12 @@ make
 ./bin/koish
 ```
 
-## Known Issues:
+## Known Issues
 - Piping input into `koish` breaks things
+- Segfault when using builtins
+- Segfault when no. of args >= `DEFAULT_ARG_COUNT` (reallocating is broken)
 
-## TODO:
+## TODO
 - Command history
 - Piping and redirecting
 - Environment variables

@@ -37,6 +37,7 @@ process_t* add_to_plist(pid_t pid, char** argv) {
 
   new->pid = pid;
   new->argv = argv;
+  new->next = NULL;
   curr->next = new;
 
   return new;
@@ -50,9 +51,9 @@ int free_plist(void) {
   process_t* tmp;
 
   while (curr) {
-    tmp = curr->next;
-    free(curr);
-    curr = tmp;
+    tmp = curr;
+    curr = curr->next;
+    free(tmp);
   }
 
   HEAD = NULL;

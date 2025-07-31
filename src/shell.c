@@ -75,17 +75,38 @@ char** sh_getargs(char* line) {
 
   char** buf = malloc(sizeof(char*) * buf_size);
   char* token = strtok(line, DELIMS);
-  int i = 0;
+  int i = 0, offset = 0;
 
   if (!buf) {
-    perror("buf");
+    perror("buff");
     exit(EXIT_FAILURE);
   }
 
   while (token) {
-    /* TODO: here we should check if the token is e.g. ';',
-    if it is then add a new entry to plist */
-    buf[i++] = token;
+    /* The idea is to have an 'offset' representing where the argv starts
+     * for a specific process_t struct. exec() requires the argv array to be
+     * NULL-terminated, so we can set that and move the 'offset' AFTER the
+     * terminator. For example, if we had something like:
+     *
+     * ls ; clear
+     * ^
+     * offset
+     *
+     * We would move the offset to...
+     *
+     * 'ls' '\0' 'clear'
+     *            ^
+     *            offset
+     *
+     */
+    if (token[0] == ';') {
+      buf[i++] = NULL;
+      add_to_plist(0, buf + offset);
+      offset = i;
+    }
+    else {
+      buf[i++] = token;
+    }
 
     if (i >= buf_size) {
       buf_size += DEFAULT_ARG_COUNT;
@@ -99,27 +120,25 @@ char** sh_getargs(char* line) {
     token = strtok(NULL, DELIMS);
   }
 
-  // Noting the array must be NULL-terminated for exec() to work
   buf[i] = NULL;
+  add_to_plist(0, buf + offset);
+
   return buf;
 }
 
 /**
- * Creates a child process to execute a program with given arguments.
- * 
- * args[0] is the name of the program to be executed, while args[1..n] are
- * optional args passed to that program.
+ * Create a child process -- given a process_t struct -- and executes it.
  *
  * Returns 1 on success.
  */
-int sh_exec(char** args, process_t* p) {
+int sh_exec(process_t* p) {
   pid_t pid;
   int status;
 
   if ((pid = fork()) == 0) {
-    if (execvp(args[0], args) < 0) {
+    if (execvp(p->argv[0], p->argv) < 0) {
       if (errno == ENOENT) {
-        fprintf(stderr, "koish: '%s' is not a valid command!\n", args[0]);
+        fprintf(stderr, "koish: '%s' is not a valid command!\n", p->argv[0]);
       }
       else {
         perror("execvp");
@@ -141,33 +160,42 @@ int sh_exec(char** args, process_t* p) {
 }
 
 /**
- * Handle processing of the argument string to determine if a built-in
+ * Handle processing of the process_t list to determine if a built-in
  * command or program should be executed.
  *
  * If the first argument is a built-in command, it is executed.
  * Otherwise, it is a program and we call sh_exec() to execute it.
  *
- * The return value of the command/program is returned.
+ * The return value of the latest command/program is returned.
  */
-int sh_process(char** args) {
-  if (!args[0]) {
-    fprintf(stderr, "koish: did you mean to say something?\n");
-  }
+int sh_process(void) {
+  process_t* curr_p = HEAD;
+  int status = 1;
 
-  /* TODO: need to have sh_getargs return a linked list of these,
-  then we can iterate through them. Also means sh_process takes
-  the linked list as an argument. */
-  process_t* p = add_to_plist(0, args);
+  while (curr_p) {
+    char** args = curr_p->argv;
 
-  // If it is a built-in, execute it
-  for (int i = 0; i < BUILTIN_COUNT; ++i) {
-    if (strcmp(args[0], builtins[i]) == 0) {
-      return exec_builtin[i](args);
+    if (!args[0]) {
+      fprintf(stderr, "koish: did you mean to say something?\n");
     }
+
+    // If it is a built-in, execute it
+    for (int i = 0; i < BUILTIN_COUNT; ++i) {
+      // TODO: need better behaviour for if exit() builtin is called
+      if (strcmp(args[0], builtins[i]) == 0) {
+        status = exec_builtin[i](args);
+        curr_p = curr_p->next;
+        break;
+      }
+    }
+
+    // Otherwise, we create a process and execute that program
+    status = sh_exec(curr_p);
+    curr_p->status = status;
+    curr_p = curr_p->next;
   }
 
-  // Otherwise, we create a process and execute that program
-  return sh_exec(args, p);
+  return status;
 }
 
 /**
@@ -184,16 +212,7 @@ void sh_loop(void) {
 
     line = sh_getline();
     args = sh_getargs(line);
-    status = sh_process(args);
-
-    // TODO: temporary only - remove!
-    fprintf(stderr, "koish: started a process (pid=%u) with args {", HEAD->pid);
-    char** a = HEAD->argv;
-    while (*a) {
-      fprintf(stderr, "%s, ", *a);
-      a++;
-    }
-    fprintf(stderr, "}\n");
+    status = sh_process();
 
     free(line);
     free(args);
