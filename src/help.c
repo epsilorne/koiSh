@@ -1,5 +1,6 @@
 #include <stdio.h>
 
+#include "version.h"
 #include "builtin.h"
 
 /**
@@ -18,7 +19,7 @@ int help(char** args) {
   printf("\033[0m");
 
   printf("----------\n");
-  printf("koiSh v0.0.1\n\n");
+  printf("koiSh v%s\n\n", VERSION);
   printf("Execute a program by entering its name.\n");
   printf("Otherwise, the following commands are built-in:\n\n");
 
