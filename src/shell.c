@@ -187,7 +187,7 @@ int sh_process(void) {
   int status = 1;
   int builtin_idx;
 
-  while (curr_p) {
+  while (curr_p && status != -1) {
     char** args = curr_p->argv;
 
     if (!args[0]) {
@@ -210,7 +210,7 @@ int sh_process(void) {
 
 /**
  * Main loop for the shell; reads a line from stdin, tokenises and execute the
- * command/program.
+ * command/program. Will break when a process/builtin returns -1, e.g. exit()
  */
 void sh_loop(void) {
   char* line;
@@ -227,7 +227,7 @@ void sh_loop(void) {
     free(line);
     free(args);
     free_plist();
-  } while (status);
+  } while (status > 0);
 }
 
 int main(int argc, char** argv) {

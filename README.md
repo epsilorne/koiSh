@@ -36,7 +36,6 @@ cd src ; head -n 5 shell.c
 ## Known Issues
 - Piping input into `koish` breaks things
 - Segfault when no. of args >= `DEFAULT_ARG_COUNT` (reallocating is broken)
-- `exit` only works alone/as the last command
 
 ## TODO
 - Command history
