@@ -160,6 +160,20 @@ int sh_exec(process_t* p) {
 }
 
 /**
+ * Given a process_t, check if it represents a builtin command.
+ *
+ * Returns the index of the command, otherwise -1 if it is not a builtin.
+ */
+int check_builtin(process_t* p, int* status) {
+  for (int i = 0; i < BUILTIN_COUNT; ++i) {
+    if (strcmp(p->argv[0], builtins[i]) == 0) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+/**
  * Handle processing of the process_t list to determine if a built-in
  * command or program should be executed.
  *
@@ -171,6 +185,7 @@ int sh_exec(process_t* p) {
 int sh_process(void) {
   process_t* curr_p = HEAD;
   int status = 1;
+  int builtin_idx;
 
   while (curr_p) {
     char** args = curr_p->argv;
@@ -178,20 +193,15 @@ int sh_process(void) {
     if (!args[0]) {
       fprintf(stderr, "koish: did you mean to say something?\n");
     }
-
-    // If it is a built-in, execute it
-    for (int i = 0; i < BUILTIN_COUNT; ++i) {
-      // TODO: need better behaviour for if exit() builtin is called
-      if (strcmp(args[0], builtins[i]) == 0) {
-        status = exec_builtin[i](args);
-        curr_p = curr_p->next;
-        break;
-      }
+    /* Check if the command is a builtin and if it is, execute it. Otherwise,
+    we create a process to execute the program. */
+    else if ((builtin_idx = check_builtin(curr_p, &status)) != -1) {
+      status = exec_builtin[builtin_idx](curr_p->argv);
     }
-
-    // Otherwise, we create a process and execute that program
-    status = sh_exec(curr_p);
-    curr_p->status = status;
+    else {
+      status = sh_exec(curr_p);
+      curr_p->status = status;
+    }
     curr_p = curr_p->next;
   }
 
