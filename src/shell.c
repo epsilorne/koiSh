@@ -6,15 +6,9 @@
 #include <unistd.h>
 
 #include "builtin.h"
-#include "plist.h"
-
-// Default line buffer size before reallocating more memory
-#define DEFAULT_BUFFER_SIZE 1024;
-
-// Default arg buffer count before reallocating more memory
-#define DEFAULT_ARG_COUNT 8;
-
-const char* DELIMS = " \t\n\r";
+#include "proc.h"
+#include "shell.h"
+#include "tokeniser.h"
 
 /**
  * Evaluates the prompt to be displayed in the shell.
@@ -65,71 +59,10 @@ char* sh_getline(void) {
 }
 
 /**
- * Tokenises a whitespace-delimeted string into individual tokens (args).
- * Allocates memory (for the array of strings) as required.
+ * Given an input process_t, create a child process to execute the program with
+ * argument(s) specified.
  *
- * Returns a null terminated 'array' of strings (args).
- */
-char** sh_getargs(char* line) {
-  size_t buf_size = DEFAULT_ARG_COUNT;
-
-  char** buf = malloc(sizeof(char*) * buf_size);
-  char* token = strtok(line, DELIMS);
-  int i = 0, offset = 0;
-
-  if (!buf) {
-    perror("buff");
-    exit(EXIT_FAILURE);
-  }
-
-  while (token) {
-    /* The idea is to have an 'offset' representing where the argv starts
-     * for a specific process_t struct. exec() requires the argv array to be
-     * NULL-terminated, so we can set that and move the 'offset' AFTER the
-     * terminator. For example, if we had something like:
-     *
-     * ls ; clear
-     * ^
-     * offset
-     *
-     * We would move the offset to...
-     *
-     * 'ls' '\0' 'clear'
-     *            ^
-     *            offset
-     *
-     */
-    if (token[0] == ';') {
-      buf[i++] = NULL;
-      add_to_plist(0, buf + offset);
-      offset = i;
-    }
-    else {
-      buf[i++] = token;
-    }
-
-    if (i >= buf_size) {
-      buf_size += DEFAULT_ARG_COUNT;
-      buf = realloc(buf, sizeof(char*) * buf_size);
-
-      if (!buf) {
-        perror("realloc");
-        exit(EXIT_FAILURE);
-      }
-    }
-    token = strtok(NULL, DELIMS);
-  }
-
-  buf[i] = NULL;
-  add_to_plist(0, buf + offset);
-
-  return buf;
-}
-
-/**
- * Create a child process -- given a process_t struct -- and executes it.
- *
- * Returns 1 on success.
+ * Returns 1 if exec() did not fail.
  */
 int sh_exec(process_t* p) {
   pid_t pid;
@@ -160,11 +93,11 @@ int sh_exec(process_t* p) {
 }
 
 /**
- * Given a process_t, check if it represents a builtin command.
+ * Check if an input process_t represents a builtin command.
  *
- * Returns the index of the command, otherwise -1 if it is not a builtin.
+ * Returns the index of the command if it is builtin, otherwise -1.
  */
-int check_builtin(process_t* p, int* status) {
+int check_builtin(process_t* p) {
   for (int i = 0; i < BUILTIN_COUNT; ++i) {
     if (strcmp(p->argv[0], builtins[i]) == 0) {
       return i;
@@ -174,20 +107,21 @@ int check_builtin(process_t* p, int* status) {
 }
 
 /**
- * Handle processing of the process_t list to determine if a built-in
- * command or program should be executed.
+ * Handle processing of the process_t list to sequentially execute processes.
  *
- * If the first argument is a built-in command, it is executed.
- * Otherwise, it is a program and we call sh_exec() to execute it.
+ * If the command is determined to be a builtin, the specific builtin will be
+ * executed. Otherwise, it is a program and we call sh_exec() to manage it.
  *
- * The return value of the latest command/program is returned.
+ * The 'status' of the latest command is returned, which is typically 1, but 0
+ * when the exit() builtin is called.
  */
 int sh_process(void) {
+  // TODO: have 'HEAD' be defined here instead of proc.c
   process_t* curr_p = HEAD;
   int status = 1;
   int builtin_idx;
 
-  while (curr_p && status != -1) {
+  while (curr_p && status > 0) {
     char** args = curr_p->argv;
 
     if (!args[0]) {
@@ -195,7 +129,7 @@ int sh_process(void) {
     }
     /* Check if the command is a builtin and if it is, execute it. Otherwise,
     we create a process to execute the program. */
-    else if ((builtin_idx = check_builtin(curr_p, &status)) != -1) {
+    else if ((builtin_idx = check_builtin(curr_p)) != -1) {
       status = exec_builtin[builtin_idx](curr_p->argv);
     }
     else {
@@ -210,7 +144,7 @@ int sh_process(void) {
 
 /**
  * Main loop for the shell; reads a line from stdin, tokenises and execute the
- * command/program. Will break when a process/builtin returns -1, e.g. exit()
+ * command/program. Will break loop when status <= 0, i.e. exit() was called.
  */
 void sh_loop(void) {
   char* line;
@@ -221,7 +155,7 @@ void sh_loop(void) {
     printf("%s", eval_prompt());
 
     line = sh_getline();
-    args = sh_getargs(line);
+    args = sh_tokenise(line);
     status = sh_process();
 
     free(line);

@@ -3,13 +3,14 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include "plist.h"
+#include "proc.h"
 
+// TODO: only temporary
 process_t* HEAD = NULL;
 
 /**
- * Add a new process to the tail of the linked list. The
- * linked list will be allocated if it hasn't been already.
+ * Add a new process to the tail of the linked list. The linked list will be
+ * allocated if it hasn't been already.
  */
 process_t* add_to_plist(pid_t pid, char** argv) {
   if (!HEAD) {

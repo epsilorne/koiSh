@@ -5,5 +5,5 @@
  */
 int sh_exit(char** args) {
   fprintf(stderr, "koish: seeya!\n");
-  return -1;
+  return 0;
 }
