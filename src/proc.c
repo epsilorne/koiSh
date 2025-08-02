@@ -12,7 +12,7 @@ process_t* HEAD = NULL;
  * Add a new process to the tail of the linked list. The linked list will be
  * allocated if it hasn't been already.
  */
-process_t* add_to_plist(pid_t pid, char** argv) {
+process_t* add_to_plist(pid_t pid, int argv_offset) {
   if (!HEAD) {
     HEAD = malloc(sizeof(process_t));
     if (!HEAD) {
@@ -21,7 +21,8 @@ process_t* add_to_plist(pid_t pid, char** argv) {
     }
 
     HEAD->pid = pid;
-    HEAD->argv = argv;
+    HEAD->argv_offset = argv_offset;
+    HEAD->next = NULL;
     return HEAD;
   }
   process_t* curr = HEAD;
@@ -37,7 +38,7 @@ process_t* add_to_plist(pid_t pid, char** argv) {
   }
 
   new->pid = pid;
-  new->argv = argv;
+  new->argv_offset = argv_offset;
   new->next = NULL;
   curr->next = new;
 

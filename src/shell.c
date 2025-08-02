@@ -62,16 +62,19 @@ char* sh_getline(void) {
  * Given an input process_t, create a child process to execute the program with
  * argument(s) specified.
  *
+ * NOTE: the input argv is assumed to 'belong' to the input process_t, i.e. the
+ * offset has already been applied.
+ *
  * Returns 1 if exec() did not fail.
  */
-int sh_exec(process_t* p) {
+int sh_exec(process_t* p, char** argv) {
   pid_t pid;
   int status;
 
   if ((pid = fork()) == 0) {
-    if (execvp(p->argv[0], p->argv) < 0) {
+    if (execvp(argv[0], argv) < 0) {
       if (errno == ENOENT) {
-        fprintf(stderr, "koish: '%s' is not a valid command!\n", p->argv[0]);
+        fprintf(stderr, "koish: '%s' is not a valid command!\n", argv[0]);
       }
       else {
         perror("execvp");
@@ -95,11 +98,14 @@ int sh_exec(process_t* p) {
 /**
  * Check if an input process_t represents a builtin command.
  *
+ * NOTE: the input argv is assumed to 'belong' to the input process_t, i.e. the
+ * offset has already been applied.
+ *
  * Returns the index of the command if it is builtin, otherwise -1.
  */
-int check_builtin(process_t* p) {
+int check_builtin(process_t* p, char** argv) {
   for (int i = 0; i < BUILTIN_COUNT; ++i) {
-    if (strcmp(p->argv[0], builtins[i]) == 0) {
+    if (strcmp(argv[0], builtins[i]) == 0) {
       return i;
     }
   }
@@ -115,25 +121,27 @@ int check_builtin(process_t* p) {
  * The 'status' of the latest command is returned, which is typically 1, but 0
  * when the exit() builtin is called.
  */
-int sh_process(void) {
-  // TODO: have 'HEAD' be defined here instead of proc.c
+int sh_process(char** argv) {
+  // TODO: have 'HEAD' be defined in this file instead of proc.c
   process_t* curr_p = HEAD;
+
   int status = 1;
   int builtin_idx;
 
   while (curr_p && status > 0) {
-    char** args = curr_p->argv;
+    // Get argv for the current process_t
+    char** curr_args = argv + curr_p->argv_offset;
 
-    if (!args[0]) {
+    if (!curr_args[0]) {
       fprintf(stderr, "koish: did you mean to say something?\n");
     }
     /* Check if the command is a builtin and if it is, execute it. Otherwise,
     we create a process to execute the program. */
-    else if ((builtin_idx = check_builtin(curr_p)) != -1) {
-      status = exec_builtin[builtin_idx](curr_p->argv);
+    else if ((builtin_idx = check_builtin(curr_p, curr_args)) != -1) {
+      status = exec_builtin[builtin_idx](curr_args);
     }
     else {
-      status = sh_exec(curr_p);
+      status = sh_exec(curr_p, curr_args);
       curr_p->status = status;
     }
     curr_p = curr_p->next;
@@ -156,7 +164,7 @@ void sh_loop(void) {
 
     line = sh_getline();
     args = sh_tokenise(line);
-    status = sh_process();
+    status = sh_process(args);
 
     free(line);
     free(args);

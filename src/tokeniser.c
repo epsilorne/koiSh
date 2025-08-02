@@ -39,7 +39,7 @@ char** sh_tokenise(char* line) {
   while (token) {
     if (token[0] == ';') {
       buf[pos++] = NULL;
-      add_to_plist(0, buf + offset);
+      add_to_plist(0, offset);
       offset = pos;
     }
     else {
@@ -59,7 +59,7 @@ char** sh_tokenise(char* line) {
   }
 
   buf[pos] = NULL;
-  add_to_plist(0, buf + offset);
+  add_to_plist(0, offset);
 
   return buf;
 }

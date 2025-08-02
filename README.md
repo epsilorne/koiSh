@@ -34,8 +34,6 @@ cd src ; head -n 5 shell.c
 ```
 
 ## Known Issues
-- Piping input into `koish` breaks things
-- Segfault when no. of args >= `DEFAULT_ARG_COUNT` (reallocating is broken)
 - Some programs like `grep` do not output
 
 ## TODO
