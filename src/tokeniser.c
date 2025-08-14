@@ -5,10 +5,11 @@
 #include <unistd.h>
 
 #include "builtin.h"
-#include "proc.h"
+#include "job.h"
 #include "shell.h"
 
 const char* DELIMS = " \t\n\r";
+extern job_t* JOB_HEAD;
 
 /**
  * Tokenise a whitespace-separated input string into an array of arguments, used
@@ -31,17 +32,25 @@ char** sh_tokenise(char* line) {
   // Represents the offset of the starting arg for the current process_t
   int offset = 0;
 
+  process_t* temp = NULL;
+  process_t* head = NULL;
+
   if (!buf) {
     perror("buff");
     exit(EXIT_FAILURE);
   }
 
   while (token) {
+    // This should be the seperator for JOBS
     if (token[0] == ';') {
       buf[pos++] = NULL;
-      add_to_plist(0, offset);
+      temp = add_to_plist(temp, 0, offset);
+      if (!head) {
+        head = temp;
+      }
       offset = pos;
     }
+    // Pipe (|) should be the separator for PROCESSES/TASKS
     else {
       buf[pos++] = token;
     }
@@ -59,7 +68,13 @@ char** sh_tokenise(char* line) {
   }
 
   buf[pos] = NULL;
-  add_to_plist(0, offset);
+  temp = add_to_plist(temp, 0, offset);
+  if (!head) {
+    head = temp;
+  }
+
+  // TODO: only temp until we have parsing for multiple jobs
+  add_to_jlist(head);
 
   return buf;
 }

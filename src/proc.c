@@ -3,32 +3,28 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include "proc.h"
-
-// TODO: only temporary
-process_t* HEAD = NULL;
+#include "job.h"
 
 /**
  * Add a new process to the tail of the linked list. The linked list will be
  * allocated if it hasn't been already.
  */
-process_t* add_to_plist(pid_t pid, int argv_offset) {
-  if (!HEAD) {
-    HEAD = malloc(sizeof(process_t));
-    if (!HEAD) {
+process_t* add_to_plist(process_t* head, pid_t pid, int argv_offset) {
+  if (!head) {
+    head = malloc(sizeof(process_t));
+    if (!head) {
       perror("malloc");
       exit(EXIT_FAILURE);
     }
 
-    HEAD->pid = pid;
-    HEAD->argv_offset = argv_offset;
-    HEAD->next = NULL;
-    return HEAD;
+    head->pid = pid;
+    head->argv_offset = argv_offset;
+    head->next = NULL;
+    return head;
   }
-  process_t* curr = HEAD;
 
-  while (curr->next) {
-    curr = curr->next;
+  while (head->next) {
+    head = head->next;
   }
 
   process_t* new = malloc(sizeof(process_t));
@@ -40,7 +36,7 @@ process_t* add_to_plist(pid_t pid, int argv_offset) {
   new->pid = pid;
   new->argv_offset = argv_offset;
   new->next = NULL;
-  curr->next = new;
+  head->next = new;
 
   return new;
 }
@@ -48,8 +44,8 @@ process_t* add_to_plist(pid_t pid, int argv_offset) {
 /**
  * Clean up the linked use, e.g. after execution of program(s).
  */
-int free_plist(void) {
-  process_t* curr = HEAD;
+int free_plist(process_t* head) {
+  process_t* curr = head;
   process_t* tmp;
 
   while (curr) {
@@ -58,6 +54,6 @@ int free_plist(void) {
     free(tmp);
   }
 
-  HEAD = NULL;
+  head = NULL;
   return 1;
 }

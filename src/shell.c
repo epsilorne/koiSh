@@ -6,9 +6,11 @@
 #include <unistd.h>
 
 #include "builtin.h"
-#include "proc.h"
 #include "shell.h"
 #include "tokeniser.h"
+#include "job.h"
+
+extern job_t* JOB_HEAD;
 
 /**
  * Evaluates the prompt to be displayed in the shell.
@@ -122,29 +124,33 @@ int check_builtin(process_t* p, char** argv) {
  * when the exit() builtin is called.
  */
 int sh_process(char** argv) {
-  // TODO: have 'HEAD' be defined in this file instead of proc.c
-  process_t* curr_p = HEAD;
+  job_t* curr_j = JOB_HEAD;
+  process_t* curr_p = curr_j->tasks;
 
   int status = 1;
   int builtin_idx;
 
-  while (curr_p && status > 0) {
-    // Get argv for the current process_t
-    char** curr_args = argv + curr_p->argv_offset;
+  // Iterate through each job and action its associated tasks
+  while (curr_j) {
+    while (curr_p && status > 0) {
+      // Get argv for the current process_t
+      char** curr_args = argv + curr_p->argv_offset;
 
-    if (!curr_args[0]) {
-      fprintf(stderr, "koish: did you mean to say something?\n");
+      if (!curr_args[0]) {
+        fprintf(stderr, "koish: did you mean to say something?\n");
+      }
+      /* Check if the command is a builtin and if it is, execute it. Otherwise,
+         we create a process to execute the program. */
+      else if ((builtin_idx = check_builtin(curr_p, curr_args)) != -1) {
+        status = exec_builtin[builtin_idx](curr_args);
+      }
+      else {
+        status = sh_exec(curr_p, curr_args);
+        curr_p->status = status;
+      }
+      curr_p = curr_p->next;
     }
-    /* Check if the command is a builtin and if it is, execute it. Otherwise,
-    we create a process to execute the program. */
-    else if ((builtin_idx = check_builtin(curr_p, curr_args)) != -1) {
-      status = exec_builtin[builtin_idx](curr_args);
-    }
-    else {
-      status = sh_exec(curr_p, curr_args);
-      curr_p->status = status;
-    }
-    curr_p = curr_p->next;
+    curr_j = curr_j->next;
   }
 
   return status;
@@ -168,7 +174,7 @@ void sh_loop(void) {
 
     free(line);
     free(args);
-    free_plist();
+    free_jlist();
   } while (status > 0);
 }
 
