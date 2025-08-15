@@ -13,7 +13,7 @@ extern job_t* JOB_HEAD;
 
 /**
  * Tokenise a whitespace-separated input string into an array of arguments, used
- * to allocate and insert process_t structs into HEAD.
+ * to allocate and insert process_t structs into a linked list of job_t.
  *
  * The idea is that exec() requires NULL-terminated argument vectors, so a
  * string like "ls -la ; clear" would become {"ls", "-la", "\0", "clear", "\0"},
@@ -33,7 +33,9 @@ char** sh_tokenise(char* line) {
   int offset = 0;
 
   process_t* temp = NULL;
-  process_t* head = NULL;
+
+  // Initialise and point to the job list head
+  job_t* curr = add_to_jlist();
 
   if (!buf) {
     perror("buff");
@@ -41,16 +43,21 @@ char** sh_tokenise(char* line) {
   }
 
   while (token) {
-    // This should be the seperator for JOBS
+    // Semicolon (;} is the separator for JOBS
     if (token[0] == ';') {
       buf[pos++] = NULL;
-      temp = add_to_plist(temp, 0, offset);
-      if (!head) {
-        head = temp;
-      }
+      add_to_plist(curr, 0, offset);
+
+      // Add a new job_t to the list, updating the 'current' job_t node
+      curr = add_to_jlist();
       offset = pos;
     }
-    // Pipe (|) should be the separator for PROCESSES/TASKS
+    // Pipe (|) is the separator for PROCESSES/TASKS
+    else if (token[0] == '|') {
+      buf[pos++] = NULL;
+      add_to_plist(curr, 0, offset);
+      offset = pos;
+    }
     else {
       buf[pos++] = token;
     }
@@ -68,13 +75,7 @@ char** sh_tokenise(char* line) {
   }
 
   buf[pos] = NULL;
-  temp = add_to_plist(temp, 0, offset);
-  if (!head) {
-    head = temp;
-  }
-
-  // TODO: only temp until we have parsing for multiple jobs
-  add_to_jlist(head);
+  add_to_plist(curr, 0, offset);
 
   return buf;
 }

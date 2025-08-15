@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- New 'job' and 'task/process' model to enable pipelines
+
 ### Fixed
 
 - No longer segfaults when exceeding `DEFAULT_ARG_COUNT`

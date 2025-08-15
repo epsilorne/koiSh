@@ -22,8 +22,8 @@ typedef struct job {
 } job_t;
 
 int init_plist(void);
-process_t* add_to_plist(process_t*, pid_t, int);
+process_t* add_to_plist(job_t*, pid_t, int);
 int free_plist(process_t* head);
 
-job_t* add_to_jlist(process_t*);
+job_t* add_to_jlist();
 int free_jlist(void);

@@ -115,7 +115,9 @@ int check_builtin(process_t* p, char** argv) {
 }
 
 /**
- * Handle processing of the process_t list to sequentially execute processes.
+ * Handle processing of the job_t list to sequentially execute jobs/tasks.
+ *
+ * For each job_t in the list, we execute its tasks (list of process_t).
  *
  * If the command is determined to be a builtin, the specific builtin will be
  * executed. Otherwise, it is a program and we call sh_exec() to manage it.
@@ -125,13 +127,14 @@ int check_builtin(process_t* p, char** argv) {
  */
 int sh_process(char** argv) {
   job_t* curr_j = JOB_HEAD;
-  process_t* curr_p = curr_j->tasks;
 
   int status = 1;
   int builtin_idx;
 
   // Iterate through each job and action its associated tasks
   while (curr_j) {
+    process_t* curr_p = curr_j->tasks;
+    // TODO: need to launch all processes (tasks) at once for piping to work
     while (curr_p && status > 0) {
       // Get argv for the current process_t
       char** curr_args = argv + curr_p->argv_offset;
