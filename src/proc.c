@@ -24,6 +24,7 @@ process_t* add_to_plist(job_t* job, pid_t pid, int argv_offset) {
 
     head->next = NULL;
     job->tasks = head;
+    job->n_tasks++;
 
     return head;
   }
@@ -45,6 +46,7 @@ process_t* add_to_plist(job_t* job, pid_t pid, int argv_offset) {
 
   curr->next = new;
   job->tasks = head;
+  job->n_tasks++;
 
   return new;
 }

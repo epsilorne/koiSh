@@ -134,7 +134,21 @@ int sh_process(char** argv) {
   // Iterate through each job and action its associated tasks
   while (curr_j) {
     process_t* curr_p = curr_j->tasks;
-    // TODO: need to launch all processes (tasks) at once for piping to work
+
+    // Store file descriptors (STDIN and STDOUT) for our n - 1 pipes
+    int* fds = malloc(sizeof(int) * (curr_j->n_tasks - 1));
+
+    /* Create the actual file descriptors for the pipes (noting first one is
+    'reading', second one is 'writing') */
+    for (int i = 0; i < curr_j->n_tasks - 1; ++i) {
+      if (pipe(fds + (i * 2)) < 0) {
+        fprintf(stderr, "koish: could not create pipe\n");
+      }
+      // TODO: remove below
+      printf("created pipes with fds %d %d\n", *(fds + i), *(fds + i + 1));
+    }
+
+    // TODO: replace with for loop since we know how many tasks there are
     while (curr_p && status > 0) {
       // Get argv for the current process_t
       char** curr_args = argv + curr_p->argv_offset;
@@ -145,13 +159,22 @@ int sh_process(char** argv) {
       /* Check if the command is a builtin and if it is, execute it. Otherwise,
          we create a process to execute the program. */
       else if ((builtin_idx = check_builtin(curr_p, curr_args)) != -1) {
+        // TODO: for builtins, we just temporarily set STDIN and STDOUT
         status = exec_builtin[builtin_idx](curr_args);
+
+        // TODO: once executed, restore STDIN and STDOUT
       }
       else {
+        // TODO: remove below
+        printf("forking...\n");
+        // TODO: update sh_exec() to include our FDs as args
+        // Then we can use dup2() (?) AFTER forking to change STDIN/STDOUT of
+        // the child to our FDs
         status = sh_exec(curr_p, curr_args);
         curr_p->status = status;
       }
       curr_p = curr_p->next;
+      free(fds);
     }
     curr_j = curr_j->next;
   }

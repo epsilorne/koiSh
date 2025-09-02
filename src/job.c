@@ -13,6 +13,7 @@ job_t* JOB_HEAD = NULL;
  * will be allocated if it hasn't been already.
  */
 job_t* add_to_jlist() {
+  // If the HEAD has not been declared, our 'inserted' node becomes the HEAD
   if (!JOB_HEAD) {
     JOB_HEAD = malloc(sizeof(job_t));
     if (!JOB_HEAD) {
@@ -22,10 +23,12 @@ job_t* add_to_jlist() {
 
     JOB_HEAD->tasks = NULL;
     JOB_HEAD->next = NULL;
+    JOB_HEAD->n_tasks = 0;
     return JOB_HEAD;
   }
+
+  // Otherwise, go through the linked list and insert the node
   job_t* curr = JOB_HEAD;
-  
   while (curr->next) {
     curr = curr->next;
   }
@@ -38,6 +41,7 @@ job_t* add_to_jlist() {
 
   new->tasks = NULL;
   new->next = NULL;
+  new->n_tasks = 0;
   curr->next = new;
 
   return new;

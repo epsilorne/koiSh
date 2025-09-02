@@ -15,7 +15,8 @@ typedef struct process {
  * singular task to represent one process (e.g. typical 'command' use case).
  */
 typedef struct job {
-  process_t* tasks;
+  size_t n_tasks;           // how many tasks this job has
+  process_t* tasks;         // a linked list of this job's tasks (processes)
   int last_status;
 
   struct job* next;
