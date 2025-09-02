@@ -35,6 +35,7 @@ cd src ; head -n 5 shell.c
 
 ## Known Issues
 - Some programs like `grep` do not output
+- Behaviour when piping builtins is poorly defined
 
 ## TODO
 - Command history

@@ -69,11 +69,17 @@ char* sh_getline(void) {
  *
  * Returns 1 if exec() did not fail.
  */
-int sh_exec(process_t* p, char** argv) {
+int sh_exec(process_t* p, char** argv, int stdin_fd, int stdout_fd) {
   pid_t pid;
   int status;
 
   if ((pid = fork()) == 0) {
+    // Set the STDIN and STDOUT of the child to the input FDs
+    if (dup2(stdin_fd, STDIN_FILENO) < 0 || dup2(stdout_fd, STDOUT_FILENO) < 0) {
+      fprintf(stderr, "koish: error setting STDIN/STDOUT of program, with stdin: %d, stdout: %d\n", stdin_fd, stdout_fd);
+      exit(EXIT_FAILURE);
+    }
+
     if (execvp(argv[0], argv) < 0) {
       if (errno == ENOENT) {
         fprintf(stderr, "koish: '%s' is not a valid command!\n", argv[0]);
@@ -131,25 +137,40 @@ int sh_process(char** argv) {
   int status = 1;
   int builtin_idx;
 
+  int stdin_fd = STDIN_FILENO, stdout_fd = STDOUT_FILENO;
+  int old_stdin, old_stdout;
+  int tasks_count;
+
   // Iterate through each job and action its associated tasks
   while (curr_j) {
     process_t* curr_p = curr_j->tasks;
+    tasks_count = curr_j->n_tasks;
 
     // Store file descriptors (STDIN and STDOUT) for our n - 1 pipes
-    int* fds = malloc(sizeof(int) * (curr_j->n_tasks - 1));
+    int* fds = tasks_count > 1 ? malloc(sizeof(int) * (tasks_count - 1)) : 0;
 
     /* Create the actual file descriptors for the pipes (noting first one is
     'reading', second one is 'writing') */
-    for (int i = 0; i < curr_j->n_tasks - 1; ++i) {
+    for (int i = 0; i < tasks_count - 1; ++i) {
       if (pipe(fds + (i * 2)) < 0) {
-        fprintf(stderr, "koish: could not create pipe\n");
+        fprintf(stderr, "koish: could not create pipes\n");
       }
-      // TODO: remove below
-      printf("created pipes with fds %d %d\n", *(fds + i), *(fds + i + 1));
     }
 
-    // TODO: replace with for loop since we know how many tasks there are
-    while (curr_p && status > 0) {
+    for (int i = 0; i < tasks_count; ++i) {
+      // Designate FDs for STDIN and STDOUT based on the no. of tasks
+      if (tasks_count <= 1) {
+        stdin_fd = STDIN_FILENO;
+        stdout_fd = STDOUT_FILENO;
+      }
+      // For more than one task, we need to set up our pipes
+      else {
+        // The first task's STDIN needs to be the 'true' STDIN
+        stdin_fd = i == 0 ? STDIN_FILENO : fds[(i - 1) * 2];
+        // The last task's STDOUT needs to be the 'true' STDOUT
+        stdout_fd = i == tasks_count - 1 ? STDOUT_FILENO : fds[(i * 2) + 1];
+      }
+
       // Get argv for the current process_t
       char** curr_args = argv + curr_p->argv_offset;
 
@@ -159,23 +180,29 @@ int sh_process(char** argv) {
       /* Check if the command is a builtin and if it is, execute it. Otherwise,
          we create a process to execute the program. */
       else if ((builtin_idx = check_builtin(curr_p, curr_args)) != -1) {
-        // TODO: for builtins, we just temporarily set STDIN and STDOUT
+        // TODO: fix this; poorly defined
+        old_stdin = dup(stdin_fd);
+        old_stdout = dup(stdout_fd);
+
+        // For builtins, we just temporarily set STDIN and STDOUT
+        if (dup2(stdin_fd, STDIN_FILENO) < 0 || dup2(stdout_fd, STDOUT_FILENO) < 0) {
+          fprintf(stderr, "koish: error setting STDIN/STDOUT of builtin\n");
+        }
+
         status = exec_builtin[builtin_idx](curr_args);
 
-        // TODO: once executed, restore STDIN and STDOUT
+        // Once executed, restore STDIN and STDOUT
+        if (dup2(old_stdin, stdin_fd) < 0 || dup2(old_stdout, stdout_fd) < 0) {
+          fprintf(stderr, "koish: error setting STDIN/STDOUT of builtin\n");
+        }
       }
       else {
-        // TODO: remove below
-        printf("forking...\n");
-        // TODO: update sh_exec() to include our FDs as args
-        // Then we can use dup2() (?) AFTER forking to change STDIN/STDOUT of
-        // the child to our FDs
-        status = sh_exec(curr_p, curr_args);
+        status = sh_exec(curr_p, curr_args, stdin_fd, stdout_fd);
         curr_p->status = status;
       }
       curr_p = curr_p->next;
-      free(fds);
     }
+    free(fds);
     curr_j = curr_j->next;
   }
 
