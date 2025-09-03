@@ -77,30 +77,60 @@ int check_builtin(process_t* p, char** argv) {
   return -1;
 }
 
-/*
- * TODO: redo doco
+/**
+ * Handle processing of the job_t list to execute jobs and their tasks.
+ *
+ * For each job_t in the list, we execute its tasks (a list of process_t). Each
+ * task is connected via a pipe (delimited by '|'), allowing for a pipeline of
+ * commands to be run with data being transferred between them. (Specifically,
+ * the pipe() syscall connects the STDOUT of one task to the STDIN of another.)
+ *
+ * If the command is a builtin, it is executed directly in the shell. Otherwise,
+ * a child process is forked to execute the program.
+ *
+ * Returns the 'status' of the latest command, which is typically 1, but 0 when
+ * the 'exit' builtin is called.
 */
 int sh_process(char** argv) {
-  job_t* j = JOB_HEAD;
-  int n, builtin_idx, status = -1;
-  pid_t pid;
+  int n, builtin_idx, status = -1, fds[2];
   char** p_args;
+  job_t* j = JOB_HEAD;
+  pid_t pid;
 
   // Iterate through each job in the linked list
-  for (;j && status; j = j->next) {
+  for (; j && status; j = j->next) {
     process_t* p = j->tasks;
     n = j->n_tasks;
 
+    /* In a pipeline, we can pass the 'previous' READ FD to feed the output of
+     * previous tasks as the STDIN of other tasks. (Except for the first and
+     * last tasks in the pipeline.) */
+    int prev_read_fd = -1;
+
     // Iterate through the tasks associated with this job
     for(int i = 0; i < n && p; ++i, p = p->next) {
+      _Bool last_task = i >= n - 1;
       p_args = argv + p->argv_offset;
 
+      // An empty input...
       if (!p_args[0]) {
         fprintf(stderr, "koish: did you mean to say something?\n");
+        status = 1;
+        continue;
       }
-      else if ((builtin_idx = check_builtin(p, p_args)) != -1) {
-        if ((status = exec_builtin[builtin_idx](p_args)) <= 0) break;
+
+      // Setup pipe FDs for non-last tasks, storing in the fd[2] array
+      if (!last_task && pipe(fds) < 0) {
+        perror("pipe");
       }
+
+      // If the command is a built in, it is executed in the shell
+      if ((builtin_idx = check_builtin(p, p_args)) != -1) {
+        if ((status = exec_builtin[builtin_idx](p_args)) <= 0)
+          break;
+      }
+
+      // Otherwise, it's a program that will be run in a child process
       else {
         if ((pid = fork()) < 0) {
           perror("fork");
@@ -108,7 +138,29 @@ int sh_process(char** argv) {
         }
 
         // Child process will run the program specified
-        else if (pid == 0) {
+        if (pid == 0) {
+          /* If we have a READ FD from the previous task, we use that as STDIN
+           * for this task. */
+          if (prev_read_fd != -1) {
+            if (dup2(prev_read_fd, STDIN_FILENO) < 0)
+              perror("dup2");
+
+            // Need to close that FD (no longer in use; it's now STDIN)
+            if (close(prev_read_fd) < 0)
+              perror("close (0)");
+          }
+
+          /* Unless this is the last task in the queue, we set STDOUT to be the
+           * WRITE end of our created pipe. (Otherwise, it's usual STDOUT.) */
+          if (!last_task) {
+            if (dup2(fds[1], STDOUT_FILENO) < 0)
+              perror("dup2");
+
+            // Need to close the pipe FDs (no longer in use)
+            if (close(fds[1]) < 0 || close(fds[0]) < 0)
+              perror("close (1)");
+          }
+
           if (execvp(p_args[0], p_args) < 0) {
             if (errno == ENOENT) {
               fprintf(stderr, "koish: '%s' is not a valid command!\n", p_args[0]);
@@ -121,8 +173,18 @@ int sh_process(char** argv) {
           exit(EXIT_FAILURE);
         }
 
-        // Parent waits for the child to finish before processing next task
+        // Parent (shell) waits for the child to finish before running next task
         else {
+          // We don't need the READ (input) FD; we can get rid of it
+          if (prev_read_fd != -1 && close(prev_read_fd) < 0)
+            perror("close (2)");
+
+          /* Close the WRITE FD of the pipe (except for the last task, who'll
+          * use STDIN. */
+          if (!last_task && close(fds[1]) < 0)
+            perror("close (3)");
+
+          prev_read_fd = fds[0];
           waitpid(pid, &status, WUNTRACED);
           status = 1;
         }
