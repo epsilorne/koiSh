@@ -32,8 +32,6 @@ char** sh_tokenise(char* line) {
   // Represents the offset of the starting arg for the current process_t
   int offset = 0;
 
-  process_t* temp = NULL;
-
   // Initialise and point to the job list head
   job_t* curr = add_to_jlist();
 

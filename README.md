@@ -33,13 +33,19 @@ For example:
 cd src ; head -n 5 shell.c
 ```
 
+It is also possible to use the `|` operator to pipe processes; to create 'pipelines' of tasks. Again, commands need to be separated with whitespace.
+
+```bash
+cat src/shell.c | head -n 50 | tail -n 5 | less
+```
+
 ## Known Issues
 - Some programs like `grep` do not output
 - Behaviour when piping builtins is poorly defined
 
 ## TODO
 - Command history
-- Piping and redirecting
+- ~~Piping~~ and redirecting
 - Environment variables
 - `.config` file (e.g. for customisable prompt and aliases)
 - Autocompletion
